@@ -3,6 +3,10 @@
 namespace Playbloom\Bundle\GuzzleBundle\Tests\DataCollector;
 
 use Playbloom\Bundle\GuzzleBundle\DataCollector\GuzzleDataCollector;
+use Psr\Http\Message\RequestInterface;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\UriInterface;
+use Psr\Http\Message\StreamInterface;
 
 /**
  * Guzzle DataCollector unit test
@@ -67,31 +71,31 @@ class GuzzleDataCollectorTest extends \PHPUnit\Framework\TestCase
         $this->assertCount(1, $guzzleDataCollector->getCalls());
         $this->assertEquals($guzzleDataCollector->countErrors(), 0);
         $this->assertEquals($guzzleDataCollector->getMethods(), array('get' => 1));
-        $this->assertEquals($guzzleDataCollector->getTotalTime(), 150);
+        $this->assertEquals($guzzleDataCollector->getTotalTime(), 0.15);
 
         $calls = $guzzleDataCollector->getCalls();
         $this->assertEquals(
             $calls[0],
             array(
                 'request' => array(
-                    'headers' => null,
+                    'headers' => [],
                     'method'  => 'get',
                     'scheme'  => 'http',
                     'host'    => 'test.local',
                     'port'    => 80,
                     'path'    => '/',
-                    'query'   => $callUrlQuery,
-                    'body'    => null
+                    'query'   => ['foo' => 'bar'],
+                    'body'    => ''
                 ),
                 'response' => array(
                     'statusCode'   => 200,
                     'reasonPhrase' => 'OK',
-                    'headers'      => null,
+                    'headers'      => [],
                     'body'         => 'Hello world',
                 ),
                 'time' => array(
-                    'total'      => 150,
-                    'connection' => 15
+                    'total'      => 0.15,
+                    'connection' => 0.015
                 ),
                 'error' => false
             )
@@ -123,31 +127,31 @@ class GuzzleDataCollectorTest extends \PHPUnit\Framework\TestCase
         $this->assertCount(1, $guzzleDataCollector->getCalls());
         $this->assertEquals($guzzleDataCollector->countErrors(), 1);
         $this->assertEquals($guzzleDataCollector->getMethods(), array('post' => 1));
-        $this->assertEquals($guzzleDataCollector->getTotalTime(), 150);
+        $this->assertEquals($guzzleDataCollector->getTotalTime(), 0.15);
 
         $calls = $guzzleDataCollector->getCalls();
         $this->assertEquals(
             $calls[0],
             array(
                 'request' => array(
-                    'headers' => null,
+                    'headers' => [],
                     'method'  => 'post',
                     'scheme'  => 'http',
                     'host'    => 'test.local',
                     'port'    => 80,
                     'path'    => '/',
-                    'query'   => $callUrlQuery,
-                    'body'    => null,
+                    'query'   => ['foo' => 'bar'],
+                    'body'    => '',
                 ),
                 'response' => array(
                     'statusCode'   => 404,
                     'reasonPhrase' => 'Not found',
-                    'headers'      => null,
+                    'headers'      => [],
                     'body'         => 'Oops',
                 ),
                 'time' => array(
-                    'total'      => 150,
-                    'connection' => 15
+                    'total'      => 0.15,
+                    'connection' => 0.015
                 ),
                 'error' => true
             )
@@ -163,15 +167,9 @@ class GuzzleDataCollectorTest extends \PHPUnit\Framework\TestCase
      */
     public function testCollectBodyRequestCall()
     {
-        $callBody = $this->getMockBuilder('Guzzle\Stream\StreamInterface')->getMock();
-        $callBody
-            ->expects($this->once())
-            ->method('__toString')
-            ->will($this->returnValue('Request body string'))
-        ;
         $callInfos = array('connect_time' => 15, 'total_time' => 150);
         $callUrlQuery = $this->stubQuery(array('foo' => 'bar'));
-        $callRequest = $this->stubRequest('post', 'http', 'test.local', '/', $callUrlQuery, $callBody);
+        $callRequest = $this->stubRequest('post', 'http', 'test.local', '/', $callUrlQuery, 'Request body string');
         $callResponse = $this->stubResponse(201, 'Created', '');
         $call = $this->stubCall($callRequest, $callResponse, $callInfos);
         $guzzleDataCollector = $this->createGuzzleCollector(array($call));
@@ -185,218 +183,103 @@ class GuzzleDataCollectorTest extends \PHPUnit\Framework\TestCase
         $this->assertEquals(count($guzzleDataCollector->getCalls()), 1);
         $this->assertEquals($guzzleDataCollector->countErrors(), 0);
         $this->assertEquals($guzzleDataCollector->getMethods(), array('post' => 1));
-        $this->assertEquals($guzzleDataCollector->getTotalTime(), 150);
+        $this->assertEquals($guzzleDataCollector->getTotalTime(), 0.15);
 
         $calls = $guzzleDataCollector->getCalls();
         $this->assertEquals(
             $calls[0],
             array(
                 'request' => array(
-                    'headers' => null,
+                    'headers' => [],
                     'method'  => 'post',
                     'scheme'  => 'http',
                     'host'    => 'test.local',
                     'port'    => 80,
                     'path'    => '/',
-                    'query'   => $callUrlQuery,
+                    'query'   => ['foo' => 'bar'],
                     'body'    => 'Request body string',
                 ),
                 'response' => array(
                     'statusCode'   => 201,
                     'reasonPhrase' => 'Created',
-                    'headers'      => null,
+                    'headers'      => [],
                     'body'         => '',
                 ),
                 'time' => array(
-                    'total'      => 150,
-                    'connection' => 15
+                    'total'      => 0.15,
+                    'connection' => 0.015
                 ),
                 'error' => false
             )
         );
     }
 
-    /**
-     * Create the DataCollector
-     *
-     * @param array $calls An array of calls
-     *
-     * @return GuzzleDataCollector
-     */
     protected function createGuzzleCollector(array $calls = array())
     {
         return new GuzzleDataCollector(new HistoryPluginStub($calls));
     }
 
-    /**
-     * Stub a Guzzle call (processed request)
-     *
-     * @param \Guzzle\Http\Message\RequestInterface $request
-     * @param \Guzzle\Http\Message\Response         $response
-     * @param array                                $info    call information
-     *
-     * @return \Guzzle\Http\Message\RequestInterface
-     */
     protected function stubCall($request, $response, array $info)
     {
-        $request
-            ->expects($this->any())
-            ->method('getResponse')
-            ->will($this->returnValue($response))
-        ;
-
-        $response
-            ->expects($this->any())
-            ->method('getInfo')
-            ->with(
-                $this->logicalOr(
-                    $this->equalTo('connect_time'),
-                    $this->equalTo('total_time')
-                )
-            )
-            ->will(
-                $this->returnCallback(
-                    function ($arg) use ($info) {
-                        if (!isset($info[$arg])) {
-                            throw new \Exception(sprintf('%s is not a mocked information', $arg));
-                        }
-
-                        return $info[$arg];
-                    }
-                )
-            )
-        ;
-
-        return $request;
+        return [
+            'request' => $request,
+            'response' => $response,
+            'transfer_stats' => $this->createTransferStats($info)
+        ];
     }
 
-    /**
-     * Stub a Guzzle QueryString
-     *
-     * @param array $query Array of url query parameters
-     *
-     * @return \Guzzle\Http\QueryString
-     */
+    protected function createTransferStats(array $info)
+    {
+        $stats = $this->createMock(\GuzzleHttp\TransferStats::class);
+        $stats->method('getTransferTime')->willReturn($info['total_time'] / 1000);
+        $stats->method('getHandlerStats')->willReturn([
+            'connect_time' => $info['connect_time'] / 1000
+        ]);
+        return $stats;
+    }
+
     protected function stubQuery(array $query)
     {
-        $query = $this->getMockBuilder('Guzzle\Http\QueryString')->getMock();
-        $query
-            ->expects($this->any())
-            ->method('__toString')
-            ->will($this->returnValue(http_build_query($query)))
-        ;
-
-        $query
-            ->expects($this->any())
-            ->method('getIterator')
-            ->will($this->returnValue($query))
-        ;
-
-        return $query;
+        return http_build_query($query);
     }
 
-    /**
-     * Stub a Guzzle request
-     *
-     * @param string                        $method get, post
-     * @param string                        $scheme http, https
-     * @param string                        $host   test.tld
-     * @param string                        $path   /test
-     * @param \Guzzle\Http\QueryString       $query
-     * @param \Guzzle\Stream\StreamInterface $body
-     *
-     * @return \Guzzle\Http\Message\RequestInterface
-     */
     protected function stubRequest($method, $scheme, $host, $path, $query, $body = null)
     {
-        $mockClassName = null === $body ? 'RequestInterface' : 'EntityEnclosingRequestInterface';
-        $request = $this->createMock(sprintf('Guzzle\Http\Message\%s', $mockClassName));
-        $request
-            ->expects($this->any())
-            ->method('getMethod')
-            ->will($this->returnValue($method))
-        ;
+        $uri = $this->createMock(UriInterface::class);
+        $uri->method('getScheme')->willReturn($scheme);
+        $uri->method('getHost')->willReturn($host);
+        $uri->method('getPort')->willReturn(80);
+        $uri->method('getPath')->willReturn($path);
+        $uri->method('getQuery')->willReturn($query);
 
-        $request
-            ->expects($this->any())
-            ->method('getScheme')
-            ->will($this->returnValue($scheme))
-        ;
+        $request = $this->createMock(RequestInterface::class);
+        $request->method('getMethod')->willReturn($method);
+        $request->method('getUri')->willReturn($uri);
+        $request->method('getHeaders')->willReturn([]);
 
-        $request
-            ->expects($this->any())
-            ->method('getHost')
-            ->will($this->returnValue($host))
-        ;
-
-        $request
-            ->expects($this->any())
-            ->method('getPort')
-            ->will($this->returnValue(80))
-        ;
-
-        $request
-            ->expects($this->any())
-            ->method('getPath')
-            ->will($this->returnValue($path))
-        ;
-
-        $request
-            ->expects($this->any())
-            ->method('getQuery')
-            ->will($this->returnValue($query))
-        ;
-
-        if (null !== $body) {
-            $request
-                ->expects($this->any())
-                ->method('getBody')
-                ->will($this->returnValue($body))
-            ;
+        if ($body !== null) {
+            $bodyStream = $this->createMock(StreamInterface::class);
+            $bodyStream->method('__toString')->willReturn($body);
+            $request->method('getBody')->willReturn($bodyStream);
+        } else {
+            $bodyStream = $this->createMock(StreamInterface::class);
+            $bodyStream->method('__toString')->willReturn('');
+            $request->method('getBody')->willReturn($bodyStream);
         }
 
         return $request;
     }
 
-    /**
-     * Stub a Guzzle response
-     *
-     * @param int    $code
-     * @param string $reason
-     * @param string $body
-     *
-     * @return \Guzzle\Http\Message\Response
-     */
     protected function stubResponse($code, $reason, $body)
     {
-        $response = $this->getMockBuilder('Guzzle\Http\Message\Response')
-            ->setConstructorArgs(array($code))
-            ->getMock();
+        $response = $this->createMock(ResponseInterface::class);
+        $response->method('getStatusCode')->willReturn($code);
+        $response->method('getReasonPhrase')->willReturn($reason);
+        $response->method('getHeaders')->willReturn([]);
 
-        $response
-            ->expects($this->any())
-            ->method('getStatusCode')
-            ->will($this->returnValue($code))
-        ;
-
-        $response
-            ->expects($this->any())
-            ->method('getReasonPhrase')
-            ->will($this->returnValue($reason))
-        ;
-
-        $response
-            ->expects($this->any())
-            ->method('getBody')
-            ->with($this->equalTo(true))
-            ->will($this->returnValue($body))
-        ;
-
-        $response
-            ->expects($this->any())
-            ->method('isError')
-            ->will($this->returnValue($code > 399 && $code < 600))
-        ;
+        $bodyStream = $this->createMock(StreamInterface::class);
+        $bodyStream->method('__toString')->willReturn($body);
+        $response->method('getBody')->willReturn($bodyStream);
 
         return $response;
     }
